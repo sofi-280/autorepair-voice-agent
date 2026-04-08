@@ -913,6 +913,12 @@ async def twilio_voice_stream(ws: WebSocket):
                 voice_config=gt.VoiceConfig(
                     prebuilt_voice_config=gt.PrebuiltVoiceConfig(voice_name="Puck")
                 )
+            ),
+            realtime_input_config=gt.RealtimeInputConfig(
+                automatic_activity_detection=gt.AutomaticActivityDetection(
+                    start_of_speech_sensitivity=gt.StartSensitivity.START_SENSITIVITY_HIGH,
+                    end_of_speech_sensitivity=gt.EndSensitivity.END_SENSITIVITY_HIGH,
+                )
             )
         )
 
