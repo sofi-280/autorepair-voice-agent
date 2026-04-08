@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: autorepair_db
+      POSTGRES_USER: autorepair
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autorepair -d autorepair_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  voice-server:
+    build:
+      context: ./apps/voice-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ./apps/voice-server/.env
+    ports:
+      - "7860:7860"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: ./apps/dashboard
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ./apps/dashboard/.env.local
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

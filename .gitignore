@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+calls.db
+*.db
+.DS_Store
+Thumbs.db
+node_modules/

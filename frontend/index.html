@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ShopMonkey Voice Agent</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg0:    #060d1a;
+      --bg1:    #0d1b2e;
+      --bg2:    #112240;
+      --bg3:    #1a3a5c;
+      --border: #1e3d5c;
+      --accent: #2563eb;
+      --acc2:   #7c3aed;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --amber:  #f59e0b;
+      --purple: #a855f7;
+      --t1:     #f0f6ff;
+      --t2:     #94a3b8;
+      --t3:     #475569;
+    }
+
+    html,body { height:100%; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                background:var(--bg0); color:var(--t1); overflow:hidden; }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    .app { height:100vh; display:grid;
+           grid-template-rows:56px 1fr;
+           grid-template-columns:1fr 320px;
+           grid-template-areas:
+             "header  header"
+             "main    sidebar"; }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    header {
+      grid-area:header;
+      background:linear-gradient(135deg,#0a1628,#1a1040);
+      border-bottom:1px solid var(--border);
+      display:flex; align-items:center; gap:14px;
+      padding:0 20px;
+    }
+    .logo { font-size:22px; }
+    .brand h1 { font-size:16px; font-weight:700; }
+    .brand p  { font-size:11px; color:var(--t2); }
+    nav { margin-left:auto; display:flex; gap:8px; }
+    nav a {
+      text-decoration:none; font-size:13px; font-weight:500;
+      color:var(--t2); padding:6px 12px; border-radius:8px;
+      border:1px solid transparent; transition:.2s;
+    }
+    nav a:hover  { color:var(--t1); border-color:var(--border); }
+    nav a.active { color:#93c5fd; border-color:var(--bg3);
+                   background:var(--bg2); }
+
+    /* ── Main call panel ────────────────────────────────────── */
+    main {
+      grid-area:main;
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      overflow:hidden;
+      padding:16px;
+      gap:12px;
+    }
+
+    /* ── Call card ──────────────────────────────────────────── */
+    .call-card {
+      background:var(--bg1);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:20px 24px;
+      display:flex;
+      align-items:center;
+      gap:20px;
+    }
+
+    /* Mic ring animation */
+    .mic-ring-wrap { position:relative; width:72px; height:72px;
+                     display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .ring {
+      position:absolute; border-radius:50%;
+      border:2px solid var(--green); opacity:0;
+      transition:opacity .15s;
+      pointer-events:none;
+    }
+    .ring:nth-child(1) { width:72px;  height:72px; }
+    .ring:nth-child(2) { width:88px;  height:88px; }
+    .ring:nth-child(3) { width:104px; height:104px; }
+    .mic-icon {
+      width:56px; height:56px; border-radius:50%;
+      background:linear-gradient(135deg,var(--accent),var(--acc2));
+      display:flex; align-items:center; justify-content:center;
+      font-size:26px; box-shadow:0 0 24px rgba(37,99,235,.35);
+      z-index:1;
+    }
+
+    .call-info { flex:1; min-width:0; }
+    #callerInfo .caller-name  { font-size:22px; font-weight:700; }
+    #callerInfo .caller-phone { font-size:13px; color:var(--t2); margin-top:3px; }
+
+    .call-right { display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+    .status-badge {
+      padding:5px 14px; border-radius:20px; font-size:12px; font-weight:600;
+      border:1px solid;
+    }
+    .status-badge.idle       { color:#94a3b8; border-color:var(--border); background:var(--bg2); }
+    .status-badge.connecting { color:var(--amber); border-color:#78350f; background:#1c1200; animation:blink 1s infinite; }
+    .status-badge.active     { color:var(--green); border-color:#14532d; background:#0a1f0a; }
+    .status-badge.speaking   { color:var(--purple); border-color:#4c1d95; background:#1a0a2e; animation:blink .7s infinite; }
+    .status-badge.error      { color:var(--red); border-color:#7f1d1d; background:#1a0505; }
+
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+    #callTimer { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--t2); }
+
+    /* Volume bar */
+    .vol-track { height:3px; background:var(--bg3); border-radius:2px; width:120px; overflow:hidden; }
+    #volumeBar { height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--purple));
+                 border-radius:2px; transition:width .08s linear; }
+
+    /* Buttons */
+    .call-btn {
+      border:none; font-size:15px; font-weight:700; cursor:pointer;
+      padding:11px 28px; border-radius:12px; transition:all .2s;
+    }
+    .call-btn.start { background:var(--green); color:#fff;
+                      box-shadow:0 4px 20px rgba(34,197,94,.3); }
+    .call-btn.start:hover { background:#16a34a; }
+    .call-btn.end   { background:var(--red);   color:#fff;
+                      box-shadow:0 4px 20px rgba(239,68,68,.3); }
+    .call-btn.end:hover { background:#b91c1c; }
+    .call-btn:disabled { opacity:.4; cursor:not-allowed; box-shadow:none; }
+
+    .ctrl-btn {
+      background:var(--bg2); border:1px solid var(--border); color:var(--t2);
+      font-size:13px; padding:8px 16px; border-radius:10px; cursor:pointer; transition:.2s;
+    }
+    .ctrl-btn:hover:not(:disabled) { background:var(--bg3); color:var(--t1); }
+    .ctrl-btn:disabled { opacity:.35; cursor:not-allowed; }
+    .ctrl-btn.muted { color:var(--red); border-color:#7f1d1d; background:#1a0505; }
+
+    /* ── Two-column content area ────────────────────────────── */
+    .content-grid {
+      display:grid; grid-template-columns:1fr 260px;
+      gap:12px; overflow:hidden; min-height:0;
+    }
+
+    /* Panel */
+    .panel {
+      background:var(--bg1); border:1px solid var(--border); border-radius:14px;
+      display:flex; flex-direction:column; overflow:hidden;
+    }
+    .panel-header {
+      padding:12px 16px; border-bottom:1px solid var(--border);
+      font-size:12px; font-weight:600; color:var(--t2);
+      text-transform:uppercase; letter-spacing:.05em;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .panel-body { flex:1; overflow-y:auto; padding:14px; }
+    .panel-body::-webkit-scrollbar { width:4px; }
+    .panel-body::-webkit-scrollbar-thumb { background:var(--bg3); border-radius:2px; }
+
+    /* Transcript */
+    .tx-placeholder, .action-placeholder, .no-data {
+      color:var(--t3); font-size:13px; text-align:center; padding:24px 8px;
+    }
+    .tx-line {
+      display:flex; gap:8px; margin-bottom:10px; animation:fadeUp .2s;
+    }
+    .tx-line.agent .tx-text { color:#bfdbfe; }
+    .tx-line.user  .tx-text { color:var(--t1); }
+    .tx-icon { font-size:14px; flex-shrink:0; margin-top:2px; }
+    .tx-text { font-size:13px; line-height:1.55; }
+    .tx-system {
+      text-align:center; font-size:11px; color:var(--t3);
+      margin:6px 0; animation:fadeUp .2s;
+    }
+
+    @keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+
+    /* Actions */
+    .action-item { margin-bottom:8px; animation:fadeUp .2s; }
+    .action-label  { font-size:12px; color:#60a5fa; font-weight:600; display:block; }
+    .action-detail { font-size:11px; color:var(--t3); word-break:break-all; }
+
+    /* ── Bottom controls ────────────────────────────────────── */
+    .bottom-bar {
+      display:flex; align-items:center; gap:10px;
+      padding:10px 0 0;
+    }
+    .msg-input {
+      flex:1; background:var(--bg2); border:1px solid var(--border);
+      color:var(--t1); padding:10px 14px; border-radius:10px; font-size:13px; outline:none;
+      transition:border-color .2s;
+    }
+    .msg-input:focus { border-color:var(--accent); }
+    .msg-input::placeholder { color:var(--t3); }
+    .msg-input:disabled { opacity:.35; }
+    .send-btn {
+      background:var(--accent); border:none; color:#fff; width:40px; height:40px;
+      border-radius:10px; font-size:18px; cursor:pointer; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center; transition:background .2s;
+    }
+    .send-btn:hover:not(:disabled) { background:#1d4ed8; }
+    .send-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+    /* ── Sidebar ────────────────────────────────────────────── */
+    aside {
+      grid-area:sidebar;
+      border-left:1px solid var(--border);
+      display:flex; flex-direction:column;
+      overflow:hidden; background:var(--bg1);
+    }
+    .sidebar-head {
+      padding:14px 16px 10px;
+      border-bottom:1px solid var(--border);
+      font-size:13px; font-weight:600; color:var(--t2);
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .sidebar-body { flex:1; overflow-y:auto; padding:10px; }
+    .sidebar-body::-webkit-scrollbar { width:3px; }
+    .sidebar-body::-webkit-scrollbar-thumb { background:var(--bg3); border-radius:2px; }
+
+    /* Recent call cards */
+    .rc-card {
+      background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+      padding:10px 12px; margin-bottom:8px; transition:.2s;
+    }
+    .rc-card:hover { border-color:var(--bg3); }
+    .rc-top { display:flex; justify-content:space-between; align-items:flex-start; gap:6px; }
+    .rc-caller strong { font-size:13px; display:block; }
+    .rc-caller span   { font-size:11px; color:var(--t3); }
+    .rc-meta { font-size:11px; color:var(--t2); text-align:right; white-space:nowrap; }
+    .rc-acts { margin-top:6px; display:flex; flex-wrap:wrap; gap:4px; }
+    .act-chip {
+      font-size:10px; background:var(--bg3); color:var(--t2);
+      padding:2px 7px; border-radius:10px; max-width:160px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">🔧</div>
+    <div class="brand">
+      <h1>ShopMonkey Voice Agent</h1>
+      <p>Gemini 2.0 Flash Live · AI Receptionist</p>
+    </div>
+    <nav>
+      <a href="index.html" class="active">📞 Voice</a>
+      <a href="dashboard.html">📊 Dashboard</a>
+    </nav>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────────── -->
+  <main>
+
+    <!-- Call card -->
+    <div class="call-card">
+      <div class="mic-ring-wrap">
+        <div class="ring"></div>
+        <div class="ring"></div>
+        <div class="ring"></div>
+        <div class="mic-icon">🎤</div>
+      </div>
+
+      <div class="call-info">
+        <div id="callerInfo">
+          <div class="caller-name">Waiting for call…</div>
+          <div class="caller-phone"></div>
+        </div>
+        <div class="vol-track" style="margin-top:10px">
+          <div id="volumeBar"></div>
+        </div>
+      </div>
+
+      <div class="call-right">
+        <div id="statusBadge" class="status-badge idle">Ready</div>
+        <div id="callTimer">00:00</div>
+        <div style="display:flex;gap:8px">
+          <button id="muteBtn" class="ctrl-btn" disabled>🎙  Mute</button>
+          <button id="callBtn" class="call-btn start">📞  Start Call</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transcript + Actions -->
+    <div class="content-grid">
+
+      <div class="panel">
+        <div class="panel-header">
+          <span>🗣 Live Transcript</span>
+        </div>
+        <div class="panel-body" id="transcriptArea">
+          <div class="tx-placeholder">Call transcript will appear here…</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span>⚡ Tool Actions</span>
+        </div>
+        <div class="panel-body" id="actionFeed">
+          <div class="action-placeholder">Tool calls will appear here…</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Text input (fallback) -->
+    <div class="bottom-bar">
+      <input type="text" class="msg-input" id="textInput"
+             placeholder="Type a message (optional text fallback)…" disabled/>
+      <button class="send-btn" id="sendBtn" disabled title="Send (Enter)">&#10148;</button>
+    </div>
+
+  </main>
+
+  <!-- ── Sidebar: Recent Calls ─────────────────────────────── -->
+  <aside>
+    <div class="sidebar-head">
+      <span>Recent Calls</span>
+      <a href="dashboard.html" style="font-size:11px;color:var(--accent);text-decoration:none">
+        View All →
+      </a>
+    </div>
+    <div class="sidebar-body" id="recentCallsPanel">
+      <p class="no-data">No calls yet</p>
+    </div>
+  </aside>
+
+</div>
+
+<!-- ── Scripts ────────────────────────────────────────────────── -->
+<script src="mediaUtils.js"></script>
+<script src="geminilive.js"></script>
+<script src="tools.js"></script>
+<script src="script.js"></script>
+
+<script>
+  // Text input fallback
+  const ti = document.getElementById("textInput");
+  const sb = document.getElementById("sendBtn");
+  function sendText() {
+    const v = ti.value.trim();
+    if (!v || !gemini) return;
+    gemini.sendText(v);
+    ti.value = "";
+  }
+  sb.onclick = sendText;
+  ti.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendText(); } });
+  // Enable text input when call is active
+  const _origSetStatus = setStatus;
+  document.addEventListener("sm:call_active", () => { ti.disabled = false; sb.disabled = false; });
+  document.addEventListener("sm:call_ended",  () => { ti.disabled = true;  sb.disabled = true;  });
+</script>
+</body>
+</html>

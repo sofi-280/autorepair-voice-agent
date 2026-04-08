@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — Smart Choice Auto Repair Voice Agent</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --bg0:#060d1a; --bg1:#0d1b2e; --bg2:#112240; --bg3:#1a3a5c;
+      --border:#1e3d5c; --accent:#2563eb; --acc2:#7c3aed;
+      --green:#22c55e; --red:#ef4444; --amber:#f59e0b; --purple:#a855f7;
+      --t1:#f0f6ff; --t2:#94a3b8; --t3:#475569;
+    }
+    html,body { min-height:100%; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                background:var(--bg0); color:var(--t1); }
+
+    /* Header */
+    header {
+      background:linear-gradient(135deg,#0a1628,#1a1040);
+      border-bottom:1px solid var(--border);
+      display:flex; align-items:center; gap:14px;
+      padding:0 24px; height:56px; position:sticky; top:0; z-index:10;
+    }
+    .logo { font-size:22px; }
+    .brand h1 { font-size:16px; font-weight:700; }
+    .brand p  { font-size:11px; color:var(--t2); }
+    nav { margin-left:auto; display:flex; gap:8px; }
+    nav a {
+      text-decoration:none; font-size:13px; font-weight:500;
+      color:var(--t2); padding:6px 12px; border-radius:8px;
+      border:1px solid transparent; transition:.2s;
+    }
+    nav a:hover  { color:var(--t1); border-color:var(--border); }
+    nav a.active { color:#93c5fd; border-color:var(--bg3); background:var(--bg2); }
+    .refresh-btn {
+      margin-left:8px; background:var(--bg2); border:1px solid var(--border);
+      color:var(--t2); padding:6px 12px; border-radius:8px; cursor:pointer;
+      font-size:13px; transition:.2s;
+    }
+    .refresh-btn:hover { background:var(--bg3); color:var(--t1); }
+
+    /* Page */
+    .page { max-width:1280px; margin:0 auto; padding:24px 20px; }
+    h2 { font-size:20px; font-weight:700; margin-bottom:4px; }
+    .sub { font-size:13px; color:var(--t2); margin-bottom:24px; }
+
+    /* Stats row */
+    .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:24px; }
+    .stat-card {
+      background:var(--bg1); border:1px solid var(--border); border-radius:14px;
+      padding:16px 18px; position:relative; overflow:hidden;
+    }
+    .stat-card::before {
+      content:''; position:absolute; top:0; left:0; width:3px; height:100%;
+      background:var(--accent-c, var(--accent));
+    }
+    .stat-label { font-size:11px; color:var(--t2); text-transform:uppercase; letter-spacing:.06em; }
+    .stat-val   { font-size:30px; font-weight:800; margin:6px 0 2px; line-height:1; }
+    .stat-note  { font-size:12px; color:var(--t3); }
+    .stat-icon  { position:absolute; top:14px; right:14px; font-size:22px; opacity:.25; }
+
+    /* Charts row */
+    .charts-row { display:grid; grid-template-columns:2fr 1fr 1fr; gap:14px; margin-bottom:24px; }
+    @media(max-width:900px) { .charts-row { grid-template-columns:1fr; } }
+    .chart-card {
+      background:var(--bg1); border:1px solid var(--border); border-radius:14px;
+      padding:18px 20px;
+    }
+    .chart-title { font-size:12px; font-weight:600; color:var(--t2); margin-bottom:14px;
+                   text-transform:uppercase; letter-spacing:.05em; }
+    .chart-wrap  { position:relative; }
+
+    /* Calls table card */
+    .table-card {
+      background:var(--bg1); border:1px solid var(--border); border-radius:14px;
+      overflow:hidden;
+    }
+    .table-head {
+      padding:14px 20px; border-bottom:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      flex-wrap:wrap;
+    }
+    .table-head h3 { font-size:15px; font-weight:700; }
+    .table-head span { font-size:12px; color:var(--t2); }
+
+    table { width:100%; border-collapse:collapse; }
+    th {
+      text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+      color:var(--t3); padding:10px 14px; border-bottom:1px solid var(--border);
+      background:var(--bg2); white-space:nowrap;
+    }
+    td { padding:12px 14px; font-size:13px; border-bottom:1px solid #0d1a2d; vertical-align:top; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:rgba(255,255,255,.02); }
+
+    /* Badges */
+    .badge {
+      display:inline-block; padding:2px 10px; border-radius:10px;
+      font-size:11px; font-weight:600; white-space:nowrap;
+    }
+    .badge.positive { background:#052e16; color:#4ade80; }
+    .badge.neutral  { background:#1a2a3a; color:#94a3b8; }
+    .badge.negative { background:#2d0505; color:#f87171; }
+    .badge.transferred { background:#1e1040; color:#c4b5fd; }
+
+    /* Tags */
+    .tag-list { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+    .tag {
+      font-size:10px; padding:2px 8px; border-radius:8px;
+      white-space:nowrap; max-width:160px;
+      overflow:hidden; text-overflow:ellipsis;
+    }
+    .tag.action  { background:var(--bg3); color:var(--t2); }
+    .tag.topic   { background:#1a2a4a; color:#93c5fd; }
+    .tag.resolved   { background:#052e16; color:#4ade80; }
+    .tag.unresolved { background:#2d0505; color:#f87171; }
+    .tag.followup   { background:#2d1a00; color:#fcd34d; }
+
+    /* Stars */
+    .stars { color:#f59e0b; letter-spacing:1px; font-size:13px; }
+    .stars.low { color:#ef4444; }
+
+    /* Summary text */
+    .summary-text {
+      font-size:12px; color:var(--t2); line-height:1.5;
+      max-width:320px;
+    }
+    .sentiment-reason {
+      font-size:11px; color:var(--t3); margin-top:2px; font-style:italic;
+    }
+
+    /* Expandable sections */
+    .expand-toggle {
+      font-size:11px; color:var(--accent); cursor:pointer; margin-top:6px;
+      display:inline-block; user-select:none;
+    }
+    .expand-body {
+      max-height:0; overflow:hidden; transition:max-height .3s ease;
+    }
+    .expand-body.open { max-height:300px; overflow-y:auto; }
+
+    .tx-body {
+      font-size:12px; color:var(--t2); line-height:1.6;
+      background:var(--bg2); border-radius:6px; margin-top:6px;
+      padding:10px; white-space:pre-wrap; word-break:break-word;
+    }
+
+    /* Transfer alert banner */
+    .transfer-alert {
+      background:linear-gradient(135deg,#2d0505,#1a1040);
+      border:1px solid #ef4444; border-radius:10px; padding:12px 16px;
+      margin-bottom:16px; display:flex; align-items:flex-start; gap:12px;
+    }
+    .transfer-alert .t-icon { font-size:20px; }
+    .transfer-alert .t-info { flex:1; font-size:13px; }
+    .transfer-alert .t-info strong { color:var(--t1); }
+    .transfer-alert .t-info span   { color:var(--t2); }
+    .transfer-alert .t-time { font-size:11px; color:var(--t3); white-space:nowrap; }
+
+    /* Empty / loading */
+    .empty-state { text-align:center; padding:40px; color:var(--t3); font-size:14px; }
+    .loading     { text-align:center; padding:30px; color:var(--t2); font-size:13px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🔧</div>
+  <div class="brand">
+    <h1 id="shopName">Voice Agent</h1>
+    <p>Analytics Dashboard</p>
+  </div>
+  <nav>
+    <a href="index.html">📞 Voice</a>
+    <a href="dashboard.html" class="active">📊 Dashboard</a>
+  </nav>
+  <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+</header>
+
+<div class="page">
+  <h2>Call Analytics</h2>
+  <p class="sub" id="subLine">Loading today's data…</p>
+
+  <!-- Transfer alerts -->
+  <div id="transferAlerts"></div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card" style="--accent-c:var(--accent)">
+      <div class="stat-icon">📞</div>
+      <div class="stat-label">Calls Today</div>
+      <div class="stat-val" id="sTotalCalls">—</div>
+      <div class="stat-note" id="sCallsNote"> </div>
+    </div>
+    <div class="stat-card" style="--accent-c:var(--green)">
+      <div class="stat-icon">📅</div>
+      <div class="stat-label">Bookings</div>
+      <div class="stat-val" id="sBookings">—</div>
+      <div class="stat-note">Appointments booked</div>
+    </div>
+    <div class="stat-card" style="--accent-c:var(--amber)">
+      <div class="stat-icon">⏱</div>
+      <div class="stat-label">Avg Duration</div>
+      <div class="stat-val" id="sAvgDur">—</div>
+      <div class="stat-note">Per call today</div>
+    </div>
+    <div class="stat-card" style="--accent-c:var(--purple)">
+      <div class="stat-icon">🔄</div>
+      <div class="stat-label">Reschedules</div>
+      <div class="stat-val" id="sReschedules">—</div>
+      <div class="stat-note">Appointments moved</div>
+    </div>
+    <div class="stat-card" style="--accent-c:var(--red)">
+      <div class="stat-icon">❌</div>
+      <div class="stat-label">Cancellations</div>
+      <div class="stat-val" id="sCancels">—</div>
+      <div class="stat-note">Appointments cancelled</div>
+    </div>
+    <div class="stat-card" style="--accent-c:#f97316">
+      <div class="stat-icon">🔁</div>
+      <div class="stat-label">Transfers</div>
+      <div class="stat-val" id="sTransfers">—</div>
+      <div class="stat-note">Sent to staff</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">📈 Calls by Hour (Today)</div>
+      <div class="chart-wrap" style="height:180px">
+        <canvas id="chartHourly"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">😊 Customer Sentiment</div>
+      <div class="chart-wrap" style="height:180px">
+        <canvas id="chartSentiment"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">⭐ Avg Satisfaction</div>
+      <div class="chart-wrap" style="height:180px">
+        <canvas id="chartSatisfaction"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calls table -->
+  <div class="table-card">
+    <div class="table-head">
+      <h3>Recent Calls — Post-Call Analysis</h3>
+      <span id="callCount">—</span>
+    </div>
+    <div id="callsTable">
+      <div class="loading">Loading calls…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Chart instances ────────────────────────────────────────────
+let hourlyChart, sentimentChart, satisfactionChart;
+
+// Load shop name
+fetch("/api/config").then(r => r.json()).then(c => {
+  if (c.shop_name) document.getElementById("shopName").textContent = c.shop_name;
+}).catch(() => {});
+
+// ── Hourly bar chart ───────────────────────────────────────────
+function mkHourly(data) {
+  const hours  = Array.from({length:12}, (_,i) => `${(7+i).toString().padStart(2,"0")}:00`);
+  const counts = hours.map(h => {
+    const hh = h.slice(0,2);
+    return data.find(d => d.hour === hh)?.count ?? 0;
+  });
+  if (hourlyChart) hourlyChart.destroy();
+  hourlyChart = new Chart(
+    document.getElementById("chartHourly").getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: hours,
+        datasets: [{ data:counts, backgroundColor:"rgba(59,130,246,.55)",
+                     borderColor:"#3b82f6", borderWidth:1, borderRadius:4 }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ grid:{ color:"#1e3d5c" }, ticks:{ color:"#475569" } },
+          y:{ grid:{ color:"#1e3d5c" }, ticks:{ color:"#475569", stepSize:1 } }
+        }
+      }
+    }
+  );
+}
+
+// ── Sentiment doughnut ─────────────────────────────────────────
+function mkSentiment(data) {
+  if (sentimentChart) sentimentChart.destroy();
+  sentimentChart = new Chart(
+    document.getElementById("chartSentiment").getContext("2d"), {
+      type:"doughnut",
+      data:{
+        labels:["Positive","Neutral","Negative"],
+        datasets:[{
+          data:[data.positive||0, data.neutral||0, data.negative||0],
+          backgroundColor:["#16a34a","#334155","#991b1b"],
+          borderColor:["#22c55e","#475569","#ef4444"], borderWidth:1
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:true, position:"bottom",
+          labels:{ color:"#94a3b8", font:{ size:11 }, padding:10 } } }
+      }
+    }
+  );
+}
+
+// ── Satisfaction bar chart ─────────────────────────────────────
+function mkSatisfaction(calls) {
+  // Distribution of satisfaction scores 1-5
+  const dist = [0,0,0,0,0];
+  calls.forEach(c => {
+    const s = parseInt(c.satisfaction) || 0;
+    if (s >= 1 && s <= 5) dist[s-1]++;
+  });
+  if (satisfactionChart) satisfactionChart.destroy();
+  const colors = ["#ef4444","#f97316","#f59e0b","#84cc16","#22c55e"];
+  satisfactionChart = new Chart(
+    document.getElementById("chartSatisfaction").getContext("2d"), {
+      type:"bar",
+      data:{
+        labels:["★","★★","★★★","★★★★","★★★★★"],
+        datasets:[{
+          data:dist,
+          backgroundColor: colors.map(c => c + "99"),
+          borderColor:     colors, borderWidth:1, borderRadius:4
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ grid:{ color:"#1e3d5c" }, ticks:{ color:"#f59e0b" } },
+          y:{ grid:{ color:"#1e3d5c" }, ticks:{ color:"#475569", stepSize:1 } }
+        }
+      }
+    }
+  );
+}
+
+// ── Load stats ─────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await fetch("/api/calls/stats").then(r => r.json());
+    document.getElementById("sTotalCalls").textContent    = s.total_today     ?? 0;
+    document.getElementById("sBookings").textContent      = s.bookings_today  ?? 0;
+    document.getElementById("sAvgDur").textContent        = fmtDur(s.avg_duration ?? 0);
+    document.getElementById("sReschedules").textContent   = s.reschedules_today ?? 0;
+    document.getElementById("sCancels").textContent       = s.cancels_today   ?? 0;
+    document.getElementById("sTransfers").textContent     = s.transfers_today ?? 0;
+
+    const today = new Date().toLocaleDateString("en-US",
+      {weekday:"long", month:"long", day:"numeric"});
+    document.getElementById("subLine").textContent =
+      `${today} · auto-refreshes every 30 seconds`;
+
+    mkHourly(s.hourly ?? []);
+    mkSentiment(s.sentiment ?? {});
+  } catch (e) {
+    console.error("Stats failed:", e);
+    document.getElementById("subLine").textContent =
+      "⚠️ Could not load stats — is the server running?";
+  }
+}
+
+// ── Load transfer alerts ───────────────────────────────────────
+async function loadTransfers() {
+  try {
+    const transfers = await fetch("/api/transfers").then(r => r.json());
+    const today = new Date().toISOString().slice(0,10);
+    const recent = transfers.filter(t => t.created_at?.startsWith(today));
+    const el = document.getElementById("transferAlerts");
+    if (!recent.length) { el.innerHTML = ""; return; }
+    el.innerHTML = recent.map(t => `
+      <div class="transfer-alert">
+        <div class="t-icon">🔁</div>
+        <div class="t-info">
+          <strong>${esc(t.caller_name || "Unknown")}</strong>
+          ${t.caller_phone ? `<span> · ${esc(t.caller_phone)}</span>` : ""}
+          <span> → </span>
+          <span>${esc(t.reason || "Transfer requested")}</span>
+        </div>
+        <div class="t-time">${fmtTime(t.created_at)}</div>
+      </div>
+    `).join("");
+  } catch(_) {}
+}
+
+// ── Load calls table ───────────────────────────────────────────
+async function loadCalls() {
+  try {
+    const calls = await fetch("/api/calls?limit=100").then(r => r.json());
+    document.getElementById("callCount").textContent =
+      calls.length ? `${calls.length} calls` : "";
+
+    // Build satisfaction chart with all calls
+    mkSatisfaction(calls);
+
+    if (!calls.length) {
+      document.getElementById("callsTable").innerHTML =
+        `<div class="empty-state">No calls recorded yet. Start a call from the Voice tab.</div>`;
+      return;
+    }
+
+    const rows = calls.map((c, i) => {
+      const sent      = c.sentiment    ?? "neutral";
+      const summary   = c.summary      ?? "";
+      const reason    = c.sentiment_reason ?? "";
+      const topics    = c.topics        ?? [];
+      const resolved  = c.resolved      ?? [];
+      const unresolved= c.unresolved    ?? [];
+      const followups = c.action_items  ?? [];
+      const score     = parseInt(c.satisfaction) || 0;
+      const transferred = c.transferred;
+
+      const txId      = `tx-${i}`;
+      const anaId     = `ana-${i}`;
+
+      // Star rating
+      const starsHtml = score > 0
+        ? `<div class="stars${score <= 2 ? " low" : ""}">${"★".repeat(score)}${"☆".repeat(5-score)}</div>`
+        : `<span style="color:var(--t3);font-size:11px">No score</span>`;
+
+      // Topic tags
+      const topicTags = topics.slice(0,4).map(t =>
+        `<span class="tag topic">${esc(t)}</span>`).join("");
+
+      // Analysis expand section
+      const hasAnalysis = summary || resolved.length || unresolved.length || followups.length;
+      const analysisHtml = hasAnalysis ? `
+        <span class="expand-toggle" onclick="toggleEl('${anaId}',this)">▸ Analysis</span>
+        <div class="expand-body" id="${anaId}">
+          ${summary ? `<p style="font-size:12px;color:var(--t2);margin:6px 0">${esc(summary)}</p>` : ""}
+          ${reason  ? `<p style="font-size:11px;color:var(--t3);font-style:italic;margin-bottom:6px">${esc(reason)}</p>` : ""}
+          <div class="tag-list">
+            ${resolved.map(r => `<span class="tag resolved">✓ ${esc(String(r).slice(0,40))}</span>`).join("")}
+            ${unresolved.map(r => `<span class="tag unresolved">✗ ${esc(String(r).slice(0,40))}</span>`).join("")}
+            ${followups.map(f => `<span class="tag followup">📌 ${esc(String(f).slice(0,40))}</span>`).join("")}
+          </div>
+        </div>` : "";
+
+      // Transcript expand
+      const txHtml = c.transcript
+        ? `<span class="expand-toggle" onclick="toggleEl('${txId}',this)">▸ Transcript</span>
+           <div class="expand-body" id="${txId}">
+             <div class="tx-body">${esc(c.transcript)}</div>
+           </div>`
+        : "";
+
+      return `
+        <tr>
+          <td>
+            <strong>${esc(c.caller_name || "Unknown")}</strong><br/>
+            <span style="font-size:11px;color:var(--t3)">${esc(c.caller_phone||"—")}</span>
+            ${transferred ? `<br/><span class="badge transferred" style="margin-top:4px;display:inline-block">🔁 transferred</span>` : ""}
+          </td>
+          <td style="color:var(--t2);white-space:nowrap">${fmtTime(c.start_time)}</td>
+          <td style="font-variant-numeric:tabular-nums;color:var(--t2);white-space:nowrap">${fmtDur(c.duration_sec)}</td>
+          <td>
+            <span class="badge ${sent}">${sent}</span>
+            ${starsHtml}
+          </td>
+          <td>
+            <div class="tag-list">${topicTags || '<span style="color:var(--t3);font-size:11px">—</span>'}</div>
+          </td>
+          <td style="min-width:220px">
+            ${analysisHtml}
+            ${txHtml}
+          </td>
+        </tr>`;
+    }).join("");
+
+    document.getElementById("callsTable").innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Caller</th>
+            <th>Time</th>
+            <th>Duration</th>
+            <th>Sentiment / Score</th>
+            <th>Topics</th>
+            <th>Analysis</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) {
+    console.error("Calls failed:", e);
+    document.getElementById("callsTable").innerHTML =
+      `<div class="empty-state">⚠️ Could not load calls — is the server running?</div>`;
+  }
+}
+
+function toggleEl(id, btn) {
+  const el = document.getElementById(id);
+  const open = el.classList.toggle("open");
+  const label = btn.textContent.replace(/^[▸▾] /,"");
+  btn.textContent = (open ? "▾ " : "▸ ") + label;
+}
+
+// ── Utilities ──────────────────────────────────────────────────
+function fmtDur(s) {
+  if (!s) return "0:00";
+  return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,"0")}`;
+}
+function fmtTime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-US",
+    { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+}
+function esc(t) {
+  return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── Init ───────────────────────────────────────────────────────
+async function loadAll() {
+  await Promise.all([loadStats(), loadCalls(), loadTransfers()]);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadAll();
+  setInterval(loadAll, 30_000);
+});
+</script>
+</body>
+</html>

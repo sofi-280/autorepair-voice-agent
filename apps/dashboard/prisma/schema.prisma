@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CallSession {
+  id              String     @id @default(cuid())
+  callSid         String?    @unique
+  roomName        String
+  callerNumber    String?
+  channel         Channel
+  status          CallStatus @default(ACTIVE)
+  startedAt       DateTime   @default(now())
+  endedAt         DateTime?
+  durationSeconds Int?
+
+  transcriptEntries TranscriptEntry[]
+  toolCalls         ToolCall[]
+  analysis          PostCallAnalysis?
+
+  @@map("call_sessions")
+}
+
+model TranscriptEntry {
+  id        String      @id @default(cuid())
+  sessionId String
+  role      SpeakerRole
+  content   String
+  createdAt DateTime    @default(now())
+
+  session CallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("transcript_entries")
+}
+
+model ToolCall {
+  id        String   @id @default(cuid())
+  sessionId String
+  toolName  String
+  arguments Json
+  result    Json?
+  calledAt  DateTime @default(now())
+
+  session CallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("tool_calls")
+}
+
+model PostCallAnalysis {
+  id          String    @id @default(cuid())
+  sessionId   String    @unique
+  summary     String
+  sentiment   Sentiment
+  outcome     Outcome
+  topics      String[]
+  actionItems String[]
+  rawResponse Json?
+  generatedAt DateTime  @default(now())
+
+  session CallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("post_call_analyses")
+}
+
+enum Channel {
+  PHONE
+  BROWSER
+}
+
+enum CallStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+  TRANSFERRED
+}
+
+enum SpeakerRole {
+  USER
+  ASSISTANT
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum Outcome {
+  APPOINTMENT_BOOKED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+  STATUS_CHECK
+  INFO_UPDATE
+  INQUIRY
+  TRANSFERRED
+  UNRESOLVED
+}
