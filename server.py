@@ -941,9 +941,9 @@ async def twilio_voice_stream(ws: WebSocket):
                         ulaw8  = base64.b64decode(msg["media"]["payload"])
                         pcm8   = _ulaw_to_pcm16(ulaw8)
                         pcm16  = _resample_pcm16(pcm8, 8000, 16000)
-                        b64    = base64.b64encode(pcm16).decode()
+                        # send raw bytes — send_realtime_input expects bytes, not base64 string
                         await session.send_realtime_input(
-                            audio=gt.Blob(data=b64,
+                            audio=gt.Blob(data=pcm16,
                                           mime_type="audio/pcm;rate=16000")
                         )
 
@@ -1058,4 +1058,5 @@ if __name__ == "__main__":
 ║   API Docs   →  http://localhost:8000/docs          ║
 ╚══════════════════════════════════════════════════════╝
 """)
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning",
+                ws_ping_interval=None, ws_ping_timeout=None)
