@@ -919,11 +919,19 @@ async def twilio_voice_stream(ws: WebSocket):
         async with client.aio.live.connect(
             model=GEMINI_MODEL, config=live_cfg
         ) as session:
+            print(f"[voice/stream] Gemini session connected, model={GEMINI_MODEL}")
+
+            # Send initial trigger so Gemini speaks the greeting immediately
+            await session.send_client_content(
+                turns=gt.Content(role="user", parts=[gt.Part(text="[call started]")]),
+                turn_complete=True
+            )
 
             async def twilio_to_gemini():
                 """Read Twilio audio → convert → send to Gemini."""
                 nonlocal stream_sid, caller_phone
                 import base64
+                media_count = 0
                 async for raw in ws.iter_text():
                     try:
                         msg = json.loads(raw)
@@ -936,25 +944,31 @@ async def twilio_voice_stream(ws: WebSocket):
                         caller_phone = msg.get("start", {}) \
                                           .get("customParameters", {}) \
                                           .get("From", "")
+                        print(f"[voice/stream] Call started sid={stream_sid} from={caller_phone}")
 
                     elif event == "media":
                         ulaw8  = base64.b64decode(msg["media"]["payload"])
                         pcm8   = _ulaw_to_pcm16(ulaw8)
                         pcm16  = _resample_pcm16(pcm8, 8000, 16000)
-                        # send raw bytes — send_realtime_input expects bytes, not base64 string
                         await session.send_realtime_input(
                             audio=gt.Blob(data=pcm16,
                                           mime_type="audio/pcm;rate=16000")
                         )
+                        media_count += 1
+                        if media_count % 50 == 1:
+                            print(f"[voice/stream] Sent {media_count} audio chunks to Gemini")
 
                     elif event == "stop":
+                        print(f"[voice/stream] Twilio stop event, total media={media_count}")
                         break
 
             async def gemini_to_twilio():
                 """Read Gemini → convert audio → send to Twilio, handle tools."""
                 nonlocal caller_name, call_actions
                 import base64
+                resp_count = 0
                 async for response in session.receive():
+                    resp_count += 1
 
                     # ── Audio ───────────────────────────────────────
                     audio_bytes = None
@@ -969,15 +983,19 @@ async def twilio_voice_stream(ws: WebSocket):
                             if hasattr(part, "inline_data") and part.inline_data:
                                 audio_bytes = part.inline_data.data
 
-                    if audio_bytes and stream_sid:
-                        pcm8  = _resample_pcm16(audio_bytes, 24000, 8000)
-                        ulaw8 = _pcm16_to_ulaw(pcm8)
-                        b64   = base64.b64encode(ulaw8).decode()
-                        await ws.send_text(json.dumps({
-                            "event":     "media",
-                            "streamSid": stream_sid,
-                            "media":     {"payload": b64}
-                        }))
+                    if audio_bytes:
+                        if stream_sid:
+                            pcm8  = _resample_pcm16(audio_bytes, 24000, 8000)
+                            ulaw8 = _pcm16_to_ulaw(pcm8)
+                            b64   = base64.b64encode(ulaw8).decode()
+                            await ws.send_text(json.dumps({
+                                "event":     "media",
+                                "streamSid": stream_sid,
+                                "media":     {"payload": b64}
+                            }))
+                            print(f"[voice/stream] Sent audio to Twilio ({len(audio_bytes)} bytes)")
+                        else:
+                            print(f"[voice/stream] WARNING: audio arrived but stream_sid not set yet")
 
                     # ── Tool calls ──────────────────────────────────
                     if hasattr(response, "tool_call") and response.tool_call:
@@ -1008,12 +1026,19 @@ async def twilio_voice_stream(ws: WebSocket):
                                for fc in response.tool_call.function_calls):
                             break
 
+                    if resp_count % 20 == 1:
+                        print(f"[voice/stream] Gemini responses so far: {resp_count}, audio_bytes={'yes' if audio_bytes else 'no'}")
+
+            print("[voice/stream] Starting gather")
             await asyncio.gather(twilio_to_gemini(), gemini_to_twilio())
+            print("[voice/stream] Gather complete")
 
     except WebSocketDisconnect:
-        pass
+        print("[voice/stream] WebSocket disconnected cleanly")
     except Exception as e:
+        import traceback
         print(f"[voice/stream] Error: {e}")
+        print(traceback.format_exc())
     finally:
         # Log the phone call to our database
         duration = int((datetime.now() - call_start).total_seconds())
