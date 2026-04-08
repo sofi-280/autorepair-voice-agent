@@ -53,7 +53,7 @@ load_dotenv()
 
 # ── Config ─────────────────────────────────────────────────────
 GEMINI_API_KEY      = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL        = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-live-001")
+GEMINI_MODEL        = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-live-preview")
 SHOPMONKEY_API_KEY  = os.environ.get("SHOPMONKEY_API_KEY", "")
 SHOPMONKEY_BASE     = "https://api.shopmonkey.cloud/v3"
 SHOP_NAME           = os.environ.get("SHOP_NAME", "Auto Repair Shop")
@@ -894,7 +894,10 @@ async def twilio_voice_stream(ws: WebSocket):
         from google import genai
         from google.genai import types as gt
 
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = genai.Client(
+            api_key=GEMINI_API_KEY,
+            http_options={"api_version": "v1alpha"}
+        )
 
         live_cfg = gt.LiveConnectConfig(
             response_modalities=["AUDIO"],
@@ -939,10 +942,10 @@ async def twilio_voice_stream(ws: WebSocket):
                         pcm8   = _ulaw_to_pcm16(ulaw8)
                         pcm16  = _resample_pcm16(pcm8, 8000, 16000)
                         b64    = base64.b64encode(pcm16).decode()
-                        await session.send(input=gt.LiveClientRealtimeInput(
-                            media_chunks=[gt.Blob(data=b64,
-                                                  mime_type="audio/pcm;rate=16000")]
-                        ))
+                        await session.send_realtime_input(
+                            audio=gt.Blob(data=b64,
+                                          mime_type="audio/pcm;rate=16000")
+                        )
 
                     elif event == "stop":
                         break
@@ -998,7 +1001,7 @@ async def twilio_voice_stream(ws: WebSocket):
                                 )]
                             ))
                         for tr in tool_resps:
-                            await session.send(input=tr)
+                            await session.send_tool_response(function_responses=tr.function_responses)
 
                         # End call if tool says so
                         if any(fc.name == "end_call"
